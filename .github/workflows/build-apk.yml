@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Baixar arquivos do repositorio
+      - name: Baixar projeto
         uses: actions/checkout@v4
 
       - name: Configurar Java
@@ -23,13 +23,13 @@ jobs:
           java-version: '17'
 
       - name: Configurar Android SDK
-        uses: android-actions/setup-android@v3
-        continue-on-error: false
+        uses: android-actions/setup-android@v4
+        with:
+          packages: ''
 
-      - name: Atualizar ferramentas Android
+      - name: Instalar ferramentas Android
         run: |
-          yes | sdkmanager --licenses
-          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+          sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Preparar Gradle
         uses: gradle/actions/setup-gradle@v4

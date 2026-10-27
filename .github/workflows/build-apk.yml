@@ -24,9 +24,12 @@ jobs:
 
       - name: Configurar Android SDK
         uses: android-actions/setup-android@v3
+        continue-on-error: false
 
-      - name: Instalar ferramentas Android
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: Atualizar ferramentas Android
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Preparar Gradle
         uses: gradle/actions/setup-gradle@v4

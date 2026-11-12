@@ -2,12 +2,14 @@
 
 Aplicativo Android nativo (Java) para observar a conectividade e manter um histórico local.
 
-## Funcionalidades desta versão (0.4.0)
+## Funcionalidades desta versão (0.5.0)
 
 - Identifica o transporte ativo: Ethernet, Wi-Fi ou dados móveis.
 - Busca hosts que respondem na sub-rede local por ARP ou portas TCP selecionadas, em tarefa de segundo plano; não equivale à lista completa de clientes do roteador.
 - Mede o tempo de abertura de conexão TCP com dois destinos independentes: `1.1.1.1:443` (Cloudflare) e `8.8.8.8:443` (Google); se um falhar, o outro ainda pode indicar conectividade externa.
-- Testa as portas TCP 80 e 443 do gateway configurado (`192.168.15.1`), sem presumir que uma porta fechada signifique roteador offline.
+- Descobre o gateway padrão dinamicamente pelas rotas da rede ativa e testa suas portas TCP 80 e 443, sem assumir IP fixo nem que porta fechada signifique roteador offline.
+- Mede o tempo de resolução DNS de `example.com` via resolvedor configurado no Android; é tempo de consulta/resolução, não ping nem teste completo de saúde do DNS.
+- Exibe detalhes disponíveis da rede ativa: transporte, validação de internet, gateway, DNS e endereços locais.
 - Tenta abrir conexão TCP com `192.168.15.1:80` como verificação auxiliar da rede local.
 - Monitoramento manual com intervalos de 5, 10, 30 ou 60 segundos, enquanto a tela permanece aberta.
 - Histórico local limitado a 2.000 amostras.

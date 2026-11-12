@@ -46,7 +46,7 @@ jobs:
           import re
           # Garantir que Java e Kotlin usem o mesmo bytecode JVM (17).
           if "compileOptions" in s:
-              s = re.sub(r"compileOptions\\s*\\{[^}]*\\}", """compileOptions {
+              s = re.sub(r"compileOptions\s*\{[^}]*\}", """compileOptions {
                   sourceCompatibility = JavaVersion.VERSION_17
                   targetCompatibility = JavaVersion.VERSION_17
               }""", s, count=1, flags=re.S)
@@ -58,7 +58,7 @@ jobs:
 
               defaultConfig {""", 1)
           if "kotlinOptions" in s:
-              s = re.sub(r"kotlinOptions\\s*\\{[^}]*\\}", """kotlinOptions {
+              s = re.sub(r"kotlinOptions\s*\{[^}]*\}", """kotlinOptions {
                   jvmTarget = "17"
               }""", s, count=1, flags=re.S)
           else:

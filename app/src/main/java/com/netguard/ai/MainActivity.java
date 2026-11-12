@@ -62,7 +62,7 @@ public class MainActivity extends Activity {
     private double jitterEwma=0;
     private long totalChecks=0, tcpFailures=0;
     private Runnable loop;
-    private TextView status, transport, internet, router, jitter, failureRate, diagnostic, updated, summary, devices, dnsMetric, networkDetails;
+    private TextView status, transport, internet, router, jitter, failureRate, diagnostic, updated, summary, devices, dnsMetric, networkDetails, qualitySummary;
     private Button toggle, modeButton;
     private Spinner interval;
     private Graph graph;
@@ -158,7 +158,9 @@ public class MainActivity extends Activity {
         controls.addView(scan);
         Button routerPanel=button("Abrir painel do roteador",Color.rgb(44,64,91),WHITE);
         routerPanel.setOnClickListener(v->{
-            try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse("http://192.168.15.1")));}
+            String gateway=getGatewayAddress();
+            if(gateway==null){Toast.makeText(this,"Gateway não identificado na rede ativa.",Toast.LENGTH_LONG).show();return;}
+            try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse("http://"+gateway)));}
             catch(Exception e){Toast.makeText(this,"Não foi possível abrir o painel do roteador.",Toast.LENGTH_LONG).show();}
         });
         controls.addView(routerPanel);
@@ -170,6 +172,7 @@ public class MainActivity extends Activity {
         graph=new Graph(this); chart.addView(graph,new LinearLayout.LayoutParams(-1,dp(175)));
         updated=txt("Ainda não há medições.",12,MUTED,false); chart.addView(updated);
         summary=txt("Resumo: aguardando medições.",12,MUTED,false); chart.addView(summary);
+        qualitySummary=txt("Estatísticas recentes: aguardando amostras.",12,MUTED,false); chart.addView(qualitySummary);
         root.addView(chart);
 
         LinearLayout diagnosis=card(); diagnosis.addView(txt("DIAGNÓSTICO BASEADO EM EVIDÊNCIAS",15,WHITE,true));
@@ -178,7 +181,7 @@ public class MainActivity extends Activity {
 
         LinearLayout optimize=card(); optimize.addView(txt("OTIMIZAÇÃO SEGURA DA REDE",15,WHITE,true));
         optimize.addView(txt("O NetGuard não altera o firmware nem configurações do roteador automaticamente. Use este checklist para reduzir congestionamento sem arriscar a conexão:",12,MUTED,false));
-        optimize.addView(txt("• Jogos: mantenha o PC/console ligado por Ethernet diretamente ao roteador.\\n• Durante partidas: pause downloads, atualizações, backups e streaming pesado.\\n• Wi-Fi: prefira 5 GHz quando o dispositivo estiver próximo; 2,4 GHz costuma alcançar mais longe.\\n• Posicionamento: deixe o roteador em local aberto, elevado e central, longe de obstáculos e fontes de interferência.\\n• Dispositivos: revise os conectados pelo app/painel oficial Vivo; pause apenas aparelhos que você reconhece e tem autorização para gerenciar.\\n• QoS: só ative priorização se a opção existir no firmware oficial e você souber identificar o dispositivo de jogo.",12,WHITE,false));
+        optimize.addView(txt("• Jogos: mantenha o PC/console ligado por Ethernet diretamente ao roteador.\n• Durante partidas: pause downloads, atualizações, backups e streaming pesado.\n• Wi-Fi: prefira 5 GHz quando o dispositivo estiver próximo; 2,4 GHz costuma alcançar mais longe.\n• Posicionamento: deixe o roteador em local aberto, elevado e central, longe de obstáculos e fontes de interferência.\n• Dispositivos: revise os conectados pelo app/painel oficial Vivo; pause apenas aparelhos que você reconhece e tem autorização para gerenciar.\n• QoS: só ative priorização se a opção existir no firmware oficial e você souber identificar o dispositivo de jogo.",12,WHITE,false));
         Button vivoGuide=button("Abrir guia oficial de Wi-Fi da Vivo",Color.rgb(44,64,91),WHITE);
         vivoGuide.setOnClickListener(v->{try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://vivo.com.br/para-voce/ajuda/autoatendimento/configuracoes-do-wifi")));}catch(Exception e){Toast.makeText(this,"Não foi possível abrir o guia.",Toast.LENGTH_LONG).show();}});
         optimize.addView(vivoGuide);root.addView(optimize);
@@ -270,8 +273,8 @@ public class MainActivity extends Activity {
     private long dnsProbe(){long start=System.nanoTime();try{InetAddress.getAllByName("example.com");return (System.nanoTime()-start)/1_000_000L;}catch(Exception e){return -1;}}
     private String readNetworkDetails(){
         try{ConnectivityManager cm=(ConnectivityManager)getSystemService(Context.CONNECTIVITY_SERVICE);Network n=cm.getActiveNetwork();NetworkCapabilities caps=n==null?null:cm.getNetworkCapabilities(n);LinkProperties lp=n==null?null:cm.getLinkProperties(n);StringBuilder s=new StringBuilder();
-            if(caps!=null){s.append("Transporte: ");if(caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))s.append("Ethernet");else if(caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI))s.append("Wi-Fi");else if(caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR))s.append("móvel");else s.append("outro");s.append("\\nValidada para internet: ").append(caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)?"sim":"não/indisponível");}
-            if(lp!=null){s.append("\\nGateway: ").append(getGatewayAddress()==null?"indisponível":getGatewayAddress());s.append("\\nDNS configurado: ");for(InetAddress d:lp.getDnsServers())s.append(d.getHostAddress()).append(" ");s.append("\\nEndereços locais: ");for(android.net.LinkAddress a:lp.getLinkAddresses())s.append(a.getAddress().getHostAddress()).append("/").append(a.getPrefixLength()).append(" ");}
+            if(caps!=null){s.append("Transporte: ");if(caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))s.append("Ethernet");else if(caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI))s.append("Wi-Fi");else if(caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR))s.append("móvel");else s.append("outro");s.append("\nValidada para internet: ").append(caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)?"sim":"não/indisponível");}
+            if(lp!=null){s.append("\nGateway: ").append(getGatewayAddress()==null?"indisponível":getGatewayAddress());s.append("\nDNS configurado: ");for(InetAddress d:lp.getDnsServers())s.append(d.getHostAddress()).append(" ");s.append("\nEndereços locais: ");for(android.net.LinkAddress a:lp.getLinkAddresses())s.append(a.getAddress().getHostAddress()).append("/").append(a.getPrefixLength()).append(" ");}
             return s.length()==0?"Sem informações de rede disponíveis.":s.toString();
         }catch(Exception e){return "Não foi possível ler detalhes da rede.";}
     }
@@ -301,8 +304,18 @@ public class MainActivity extends Activity {
         failureRate.setText(String.format(Locale.getDefault(),"%.1f%%",rate));
         updated.setText("Última amostra: "+new SimpleDateFormat("dd/MM/yyyy HH:mm:ss",Locale.getDefault()).format(new Date(s.time)));
         summary.setText("Amostras: "+history.size()+" · Falhas TCP: "+tcpFailures+" · Intervalo: "+(intervalMs/1000)+" s");
+        qualitySummary.setText(buildQualitySummary());
         graph.invalidate();updateTransport();
     }
+    private String buildQualitySummary(){
+        ArrayList<Long> values=new ArrayList<>();
+        synchronized(history){for(int i=Math.max(0,history.size()-100);i<history.size();i++){long v=history.get(i).effectiveLatency();if(v>=0)values.add(v);}}
+        if(values.isEmpty())return "Estatísticas recentes: ainda não há medições TCP válidas.";
+        java.util.Collections.sort(values);long min=values.get(0),max=values.get(values.size()-1);double avg=0;for(long v:values)avg+=v;avg/=values.size();
+        long median=values.get(values.size()/2);
+        return "Últimas "+values.size()+" amostras válidas — mínimo: "+min+" ms · mediana: "+median+" ms · média: "+String.format(Locale.getDefault(),"%.1f",avg)+" ms · máximo: "+max+" ms. Não é ping ICMP.";
+    }
+
     private void saveHistoryLocked(){
         try{JSONArray a=new JSONArray();for(Sample s:history){JSONObject o=new JSONObject();o.put("t",s.time);o.put("i",s.internetMs);o.put("a",s.alternateMs);o.put("r",s.routerMs);o.put("rh",s.routerHttpsMs);o.put("dns",s.dnsMs);o.put("po",s.primaryOk);o.put("ao",s.alternateOk);o.put("ok",s.internetOk);a.put(o);}
             getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString("samples",a.toString()).putLong("checks",totalChecks).putLong("fails",tcpFailures).apply();

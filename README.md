@@ -4,7 +4,7 @@ Aplicativo Android nativo (Java) para observar a conectividade e manter um hist�
 
 ## Funcionalidades desta versão (0.2.0)
 
-- Identifica o transporte ativo: Ethernet, Wi-Fi ou dados móveis.
+- Identifica o transporte ativo: Ethernet, Wi-Fi ou dados móveis.\n- Busca hosts acessíveis na sub-rede local e tenta identificar MAC/portas quando o Android permite.
 - Mede o tempo de abertura de conexão TCP com `1.1.1.1:443`.
 - Tenta abrir conexão TCP com `192.168.15.1:80` como verificação auxiliar da rede local.
 - Monitoramento manual com intervalos de 5, 10, 30 ou 60 segundos, enquanto a tela permanece aberta.
@@ -25,7 +25,7 @@ A taxa de falhas é a proporção de tentativas TCP que não completaram, não p
 
 - O monitoramento desta versão só funciona enquanto o app está aberto; não promete operação 24/7.
 - O teste no celular não mede o ping real do Rocket League em outro dispositivo.
-- Não há integração com API administrativa do roteador, controle de QoS ou alteração automática da rede.
+- A descoberta local não é uma lista oficial de clientes do roteador: dispositivos silenciosos, isolados ou com portas fechadas podem não aparecer; MAC pode ficar indisponível no Android.\n- Não há integração com API administrativa do roteador, controle de QoS ou alteração automática da rede. O modelo/firmware Vivo pode bloquear ou não expor esses recursos; não há overclock físico via app.
 - Não há envio de medições para nuvem nem alertas remotos.
 - A IA ainda não é um modelo treinado: os textos diagnósticos são regras locais conservadoras.
 

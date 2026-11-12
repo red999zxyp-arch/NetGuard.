@@ -11,7 +11,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Baixar projeto
         uses: actions/checkout@v4
@@ -24,12 +23,9 @@ jobs:
 
       - name: Configurar Android SDK
         uses: android-actions/setup-android@v4
-        with:
-          packages: ''
 
       - name: Instalar ferramentas Android
-        run: |
-          sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+        run: sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Preparar Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -39,9 +35,45 @@ jobs:
       - name: Extrair projeto
         run: unzip -o NetGuardAI-Android-Starter.zip
 
+      - name: Corrigir compatibilidade Java e Kotlin
+        working-directory: NetGuardAI-Android
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("app/build.gradle.kts")
+          s = p.read_text(encoding="utf-8")
+          import re
+          # Garantir que Java e Kotlin usem o mesmo bytecode JVM (17).
+          if "compileOptions" in s:
+              s = re.sub(r"compileOptions\\s*\\{[^}]*\\}", """compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }""", s, count=1, flags=re.S)
+          else:
+              s = s.replace("    defaultConfig {", """    compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+
+              defaultConfig {""", 1)
+          if "kotlinOptions" in s:
+              s = re.sub(r"kotlinOptions\\s*\\{[^}]*\\}", """kotlinOptions {
+                  jvmTarget = "17"
+              }""", s, count=1, flags=re.S)
+          else:
+              s = s.replace("    defaultConfig {", """    kotlinOptions {
+                  jvmTarget = "17"
+              }
+
+              defaultConfig {""", 1)
+          p.write_text(s, encoding="utf-8")
+          print(p.read_text(encoding="utf-8"))
+          PY
+
       - name: Compilar APK
         working-directory: NetGuardAI-Android
-        run: gradle --no-daemon :app:assembleDebug
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
 
       - name: Disponibilizar APK
         uses: actions/upload-artifact@v4

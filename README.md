@@ -2,7 +2,7 @@
 
 Aplicativo Android nativo (Java) para observar a conectividade e manter um histórico local.
 
-## Funcionalidades desta versão (0.5.0)
+## Funcionalidades desta versão (0.7.0)
 
 - Identifica o transporte ativo: Ethernet, Wi-Fi ou dados móveis.
 - Busca hosts que respondem na sub-rede local por ARP ou portas TCP selecionadas, em tarefa de segundo plano; não equivale à lista completa de clientes do roteador.
@@ -19,6 +19,8 @@ Aplicativo Android nativo (Java) para observar a conectividade e manter um hist�
 - Resumo de falhas TCP, comparação de destinos e diagnóstico textual cauteloso.
 - Notificações locais de possível interrupção após dois ciclos consecutivos sem resposta nos dois destinos e de recuperação, enquanto o monitoramento está ativo e a permissão de notificações foi concedida.
 - Preferências de intervalo e perfil Geral/Jogos persistidas localmente.
+- Alertas avançados configuráveis para limiar de latência TCP (100–500 ms) e variação TCP estimada (15–100 ms), com aviso por episódio e rearme após recuperação.
+- Preferências de limites e ativação de alertas persistidas localmente.
 - Exportação CSV pelo seletor de documentos do Android.
 - Exclusão manual do histórico.
 
@@ -36,6 +38,7 @@ A taxa de falhas é a proporção de tentativas TCP que não completaram, não p
 - Não há integração com API administrativa do roteador, controle de QoS ou alteração automática da rede. O app apenas verifica conectividade TCP e abre o painel web; não conhece as credenciais nem altera o firmware/configuração. O modelo/firmware Vivo pode bloquear ou não expor esses recursos; não há overclock físico via app. O atalho do painel usa o gateway padrão descoberto na rede ativa e abre `http://<gateway>` no navegador.
 - Não há envio de medições para nuvem nem alertas remotos. As notificações são locais e só podem ser emitidas durante a execução do monitoramento.
 - A IA ainda não é um modelo treinado: os textos diagnósticos são regras locais conservadoras.
+- Os limites de alerta são configuráveis, mas dependem das medições do próprio celular; não representam a latência real do dispositivo que executa o Rocket League.
 
 ## Compilar
 

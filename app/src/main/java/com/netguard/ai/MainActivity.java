@@ -55,6 +55,7 @@ public class MainActivity extends Activity {
     private boolean running=false, gameMode=false, probeInFlight=false, outageAlertSent=false;
     private int intervalMs=10000, consecutiveFailures=0;
     private long lastGoodLatency=-1;
+    private int lastGoodSource=0;
     private double jitterEwma=0;
     private long totalChecks=0, tcpFailures=0;
     private Runnable loop;
@@ -71,6 +72,7 @@ public class MainActivity extends Activity {
             primaryOk=po;alternateOk=ao;internetOk=po||ao;
         }
         long effectiveLatency(){return primaryOk?internetMs:(alternateOk?alternateMs:-1);}
+        int effectiveSource(){return primaryOk?1:(alternateOk?2:0);}
     }
 
     @Override public void onCreate(Bundle b) {
@@ -234,10 +236,12 @@ public class MainActivity extends Activity {
             long gwHttps=probe("192.168.15.1",443,700);
             long now=System.currentTimeMillis(); boolean primaryOk=net>=0, alternateOk=alt>=0;
             long effective=primaryOk?net:(alternateOk?alt:-1);
+            int source=primaryOk?1:(alternateOk?2:0);
             synchronized(history){
                 totalChecks++; if(effective<0){tcpFailures++;consecutiveFailures++;}else consecutiveFailures=0;
-                if(effective>=0&&lastGoodLatency>=0){double delta=Math.abs(effective-lastGoodLatency);jitterEwma=(jitterEwma==0?delta:(0.25*delta+0.75*jitterEwma));}
-                if(effective>=0)lastGoodLatency=effective;
+                if(effective>=0&&lastGoodLatency>=0&&source==lastGoodSource){double delta=Math.abs(effective-lastGoodLatency);jitterEwma=(jitterEwma==0?delta:(0.25*delta+0.75*jitterEwma));}
+                else if(source!=lastGoodSource)jitterEwma=0;
+                if(effective>=0){lastGoodLatency=effective;lastGoodSource=source;}
                 history.add(new Sample(now,net,alt,gw,gwHttps,primaryOk,alternateOk));while(history.size()>2000)history.remove(0);
                 saveHistoryLocked();
             }
@@ -287,8 +291,8 @@ public class MainActivity extends Activity {
             for(int i=0;i<a.length();i++){JSONObject o=a.getJSONObject(i);long primary=o.getLong("i");boolean primaryOk=o.optBoolean("po",o.getBoolean("ok"));long alternate=o.optLong("a",-1);boolean alternateOk=o.optBoolean("ao",false);history.add(new Sample(o.getLong("t"),primary,alternate,o.getLong("r"),o.optLong("rh",-1),primaryOk,alternateOk));}
             totalChecks=getSharedPreferences(PREFS,MODE_PRIVATE).getLong("checks",history.size());
             tcpFailures=getSharedPreferences(PREFS,MODE_PRIVATE).getLong("fails",0);
-            for(int i=history.size()-1;i>=0;i--)if(history.get(i).effectiveLatency()>=0){lastGoodLatency=history.get(i).effectiveLatency();break;}
-            for(int i=1;i<history.size();i++){Sample a1=history.get(i-1),a2=history.get(i);if(a1.effectiveLatency()>=0&&a2.effectiveLatency()>=0){double d=Math.abs(a2.effectiveLatency()-a1.effectiveLatency());jitterEwma=(jitterEwma==0?d:0.25*d+0.75*jitterEwma);}}
+            for(int i=history.size()-1;i>=0;i--)if(history.get(i).effectiveLatency()>=0){lastGoodLatency=history.get(i).effectiveLatency();lastGoodSource=history.get(i).effectiveSource();break;}
+            for(int i=1;i<history.size();i++){Sample a1=history.get(i-1),a2=history.get(i);if(a1.effectiveLatency()>=0&&a2.effectiveLatency()>=0&&a1.effectiveSource()==a2.effectiveSource()){double d=Math.abs(a2.effectiveLatency()-a1.effectiveLatency());jitterEwma=(jitterEwma==0?d:0.25*d+0.75*jitterEwma);}}
         }catch(Exception ignored){}
     }
     private void exportCsv(){
@@ -306,7 +310,7 @@ public class MainActivity extends Activity {
     }
     private void confirmClear(){
         new android.app.AlertDialog.Builder(this).setTitle("Apagar histórico?").setMessage("Todas as amostras locais serão apagadas. Esta ação não pode ser desfeita.")
-            .setNegativeButton("Cancelar",null).setPositiveButton("Apagar",(d,w)->{synchronized(history){history.clear();totalChecks=0;tcpFailures=0;lastGoodLatency=-1;jitterEwma=0;consecutiveFailures=0;saveHistoryLocked();}internet.setText("-- ms");router.setText("-- ms");jitter.setText("-- ms");failureRate.setText("0%");updated.setText("Histórico apagado.");summary.setText("Aguardando novas amostras.");diagnostic.setText("Histórico local apagado.");graph.invalidate();}).show();
+            .setNegativeButton("Cancelar",null).setPositiveButton("Apagar",(d,w)->{synchronized(history){history.clear();totalChecks=0;tcpFailures=0;lastGoodLatency=-1;lastGoodSource=0;jitterEwma=0;consecutiveFailures=0;saveHistoryLocked();}internet.setText("-- ms");router.setText("-- ms");jitter.setText("-- ms");failureRate.setText("0%");updated.setText("Histórico apagado.");summary.setText("Aguardando novas amostras.");diagnostic.setText("Histórico local apagado.");graph.invalidate();}).show();
     }
     @Override protected void onDestroy(){running=false;if(loop!=null)handler.removeCallbacks(loop);worker.shutdownNow();scanWorker.shutdownNow();super.onDestroy();}
 

@@ -153,7 +153,7 @@ public class MainActivity extends Activity {
     private void scanDevices(Button button){
         button.setEnabled(false);
         devices.setText("Pesquisando dispositivos acessíveis na rede local…");
-        LanScanner.scan(this,(subnet,found,error)->{
+        LanScanner.scan(this,(subnet,found,error)->runOnUiThread(()->{
             button.setEnabled(true);
             if(error!=null){devices.setText("Busca indisponível: "+error);return;}
             StringBuilder out=new StringBuilder("Rede detectada: "+subnet+"\\nHosts encontrados: "+found.size());
@@ -162,7 +162,7 @@ public class MainActivity extends Activity {
                    .append(" · portas: ").append(d.services);
             }
             devices.setText(out.toString());
-        });
+        }));
     }
     private void toggleMode(){gameMode=!gameMode;modeButton.setText(gameMode?"Modo: Jogos":"Modo: Geral");diagnostic.setText(gameMode?"Perfil Rocket League: priorizando estabilidade e observação de variações. O teste do celular não mede o ping do jogo no outro dispositivo.":"Perfil geral: observação da conectividade externa e do acesso TCP ao roteador.");}
 

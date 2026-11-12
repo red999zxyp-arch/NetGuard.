@@ -2,7 +2,7 @@
 
 Aplicativo Android nativo (Java) para observar a conectividade e manter um histórico local.
 
-## Funcionalidades desta versão (0.3.2)
+## Funcionalidades desta versão (0.3.3)
 
 - Identifica o transporte ativo: Ethernet, Wi-Fi ou dados móveis.
 - Busca hosts que respondem na sub-rede local por ARP ou portas TCP selecionadas, em tarefa de segundo plano; não equivale à lista completa de clientes do roteador.

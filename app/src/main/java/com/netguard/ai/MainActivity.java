@@ -162,9 +162,9 @@ public class MainActivity extends Activity {
         LanScanner.scan(this,(subnet,found,error)->runOnUiThread(()->{
             button.setEnabled(true);
             if(error!=null){devices.setText("Busca indisponível: "+error);return;}
-            StringBuilder out=new StringBuilder("Rede detectada: "+subnet+"\\nHosts encontrados: "+found.size());
+            StringBuilder out=new StringBuilder("Sub-rede: "+subnet+"\nHosts com resposta: "+found.size()+"\nNota: a busca identifica apenas hosts que responderam ao ARP ou a portas TCP testadas; não é a lista completa do roteador.");
             for(LanScanner.Device d:found){
-                out.append("\\n").append(d.ip).append(" · ").append(d.mac)
+                out.append("\n").append(d.ip).append(" · ").append(d.mac)
                    .append(" · portas: ").append(d.services);
             }
             devices.setText(out.toString());

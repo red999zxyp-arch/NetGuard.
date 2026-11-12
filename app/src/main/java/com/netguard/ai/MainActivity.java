@@ -57,12 +57,16 @@ public class MainActivity extends Activity {
     private final ArrayList<Sample> history=new ArrayList<>();
     private boolean running=false, gameMode=false, probeInFlight=false, outageAlertSent=false;
     private int intervalMs=10000, consecutiveFailures=0;
+    private int latencyAlertMs=150, jitterAlertMs=30;
+    private boolean qualityAlerts=true, latencyAlertSent=false, jitterAlertSent=false;
     private long lastGoodLatency=-1;
     private int lastGoodSource=0;
     private double jitterEwma=0;
     private long totalChecks=0, tcpFailures=0;
     private Runnable loop;
     private TextView status, transport, internet, router, jitter, failureRate, diagnostic, updated, summary, devices, dnsMetric, networkDetails, qualitySummary;
+    private Spinner latencyLimitSpinner, jitterLimitSpinner;
+    private android.widget.CheckBox qualityAlertsCheck;
     private Button toggle, modeButton;
     private Spinner interval;
     private Graph graph;
@@ -85,6 +89,9 @@ public class MainActivity extends Activity {
         loadHistory();
         intervalMs=getSharedPreferences(PREFS,MODE_PRIVATE).getInt("interval_ms",10000);
         gameMode=getSharedPreferences(PREFS,MODE_PRIVATE).getBoolean("game_mode",false);
+        latencyAlertMs=getSharedPreferences(PREFS,MODE_PRIVATE).getInt("latency_alert_ms",150);
+        jitterAlertMs=getSharedPreferences(PREFS,MODE_PRIVATE).getInt("jitter_alert_ms",30);
+        qualityAlerts=getSharedPreferences(PREFS,MODE_PRIVATE).getBoolean("quality_alerts",true);
         buildUi();
         applyMode();
         renderHistory();
@@ -168,6 +175,42 @@ public class MainActivity extends Activity {
         controls.addView(devices);
         root.addView(controls);
 
+        LinearLayout alertSettings=card();
+        alertSettings.addView(txt("ALERTAS AVANÇADOS",15,WHITE,true));
+        alertSettings.addView(txt("Defina os limites que o aplicativo deve observar. Os alertas usam medições TCP e variação entre amostras, não ping ICMP nem jitter real do Rocket League.",12,MUTED,false));
+        qualityAlertsCheck=new android.widget.CheckBox(this);
+        qualityAlertsCheck.setText("Ativar alertas de qualidade da conexão");
+        qualityAlertsCheck.setTextColor(WHITE);
+        qualityAlertsCheck.setButtonTintList(ColorStateList.valueOf(GREEN));
+        qualityAlertsCheck.setChecked(qualityAlerts);
+        qualityAlertsCheck.setOnCheckedChangeListener((v,checked)->{
+            qualityAlerts=checked;
+            latencyAlertSent=false;jitterAlertSent=false;
+            getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean("quality_alerts",checked).apply();
+        });
+        alertSettings.addView(qualityAlertsCheck);
+        alertSettings.addView(txt("Alertar quando latência TCP atingir",12,MUTED,false));
+        latencyLimitSpinner=new Spinner(this);
+        String[] latencyOptions={"100 ms","150 ms","200 ms","250 ms","300 ms","500 ms"};
+        latencyLimitSpinner.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,latencyOptions));
+        latencyLimitSpinner.setSelection(indexOf(new int[]{100,150,200,250,300,500},latencyAlertMs,1));
+        latencyLimitSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){latencyAlertMs=new int[]{100,150,200,250,300,500}[pos];latencyAlertSent=false;getSharedPreferences(PREFS,MODE_PRIVATE).edit().putInt("latency_alert_ms",latencyAlertMs).apply();}
+            public void onNothingSelected(android.widget.AdapterView<?> p){}
+        });
+        alertSettings.addView(latencyLimitSpinner);
+        alertSettings.addView(txt("Alertar quando variação TCP estimada atingir",12,MUTED,false));
+        jitterLimitSpinner=new Spinner(this);
+        String[] jitterOptions={"15 ms","20 ms","30 ms","40 ms","50 ms","75 ms","100 ms"};
+        jitterLimitSpinner.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,jitterOptions));
+        jitterLimitSpinner.setSelection(indexOf(new int[]{15,20,30,40,50,75,100},jitterAlertMs,2));
+        jitterLimitSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){jitterAlertMs=new int[]{15,20,30,40,50,75,100}[pos];jitterAlertSent=false;getSharedPreferences(PREFS,MODE_PRIVATE).edit().putInt("jitter_alert_ms",jitterAlertMs).apply();}
+            public void onNothingSelected(android.widget.AdapterView<?> p){}
+        });
+        alertSettings.addView(jitterLimitSpinner);
+        root.addView(alertSettings);
+
         LinearLayout chart=card(); chart.addView(txt("HISTÓRICO DE LATÊNCIA TCP",15,WHITE,true));
         graph=new Graph(this); chart.addView(graph,new LinearLayout.LayoutParams(-1,dp(175)));
         updated=txt("Ainda não há medições.",12,MUTED,false); chart.addView(updated);
@@ -197,10 +240,12 @@ public class MainActivity extends Activity {
         root.addView(tools);
 
         root.addView(txt("A latência é tempo de conexão TCP (Cloudflare 1.1.1.1 e Google 8.8.8.8), não ping ICMP. Falhas TCP não são perda de pacotes IP. O roteador é testado nas portas 80 e 443; portas fechadas não significam que esteja offline.",11,MUTED,false));
+        root.addView(txt("Alertas avançados: limites de latência e variação TCP configuráveis, com aviso único por episódio e rearme quando a conexão volta abaixo do limite.",11,MUTED,false));
         root.addView(txt("O monitoramento desta versão funciona enquanto o aplicativo permanece aberto. Não oferece monitoramento 24/7.",11,AMBER,true));
         setContentView(scroll);
     }
 
+    private int indexOf(int[] values,int target,int fallback){for(int i=0;i<values.length;i++)if(values[i]==target)return i;return fallback;}
     private LinearLayout horizontal(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.HORIZONTAL);l.setGravity(Gravity.CENTER_VERTICAL);return l;}
     private LinearLayout card(){LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);c.setPadding(dp(14),dp(12),dp(14),dp(12));c.setBackgroundColor(PANEL);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(0,dp(12),0,0);c.setLayoutParams(p);return c;}
     private TextView txt(String s,int size,int color,boolean bold){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(color);t.setPadding(0,dp(3),0,dp(5));if(bold)t.setTypeface(null,android.graphics.Typeface.BOLD);return t;}
@@ -260,6 +305,12 @@ public class MainActivity extends Activity {
                 probeInFlight=false;renderHistory();diagnoseLatest();
                 if(consecutiveFailures>=2&&!outageAlertSent){outageAlertSent=true;postNetworkAlert("Possível interrupção da internet","Dois ciclos consecutivos falharam nos dois destinos TCP externos. Verifique outros dispositivos antes de concluir.");}
                 else if(effective>=0&&outageAlertSent){outageAlertSent=false;postNetworkAlert("Conexão recuperada","Pelo menos um dos destinos TCP externos voltou a responder.");}
+                if(qualityAlerts&&totalChecks>=3&&effective>=0){
+                    if(effective>=latencyAlertMs&&!latencyAlertSent){latencyAlertSent=true;postNetworkAlert("Latência elevada", "A conexão TCP atingiu "+effective+" ms (limite configurado: "+latencyAlertMs+" ms). Compare os dois destinos e outros dispositivos antes de atribuir a causa.");}
+                    else if(effective<Math.max(1,latencyAlertMs-20)&&latencyAlertSent){latencyAlertSent=false;}
+                    if(jitterEwma>=jitterAlertMs&&!jitterAlertSent){jitterAlertSent=true;postNetworkAlert("Variação de conexão elevada", "A variação TCP estimada atingiu "+String.format(Locale.getDefault(),"%.1f",jitterEwma)+" ms (limite: "+jitterAlertMs+" ms). Não representa jitter UDP/ICMP do jogo.");}
+                    else if(jitterEwma<Math.max(1,jitterAlertMs-5)&&jitterAlertSent){jitterAlertSent=false;}
+                }
             });
         });
     }

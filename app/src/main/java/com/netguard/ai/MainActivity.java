@@ -1,6 +1,11 @@
 package com.netguard.ai;
 
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.os.Build;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Canvas;
@@ -47,7 +52,7 @@ public class MainActivity extends Activity {
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     private final ExecutorService scanWorker=Executors.newSingleThreadExecutor();
     private final ArrayList<Sample> history=new ArrayList<>();
-    private boolean running=false, gameMode=false, probeInFlight=false;
+    private boolean running=false, gameMode=false, probeInFlight=false, outageAlertSent=false;
     private int intervalMs=10000, consecutiveFailures=0;
     private long lastGoodLatency=-1;
     private double jitterEwma=0;
@@ -76,6 +81,25 @@ public class MainActivity extends Activity {
         buildUi();
         renderHistory();
         updateTransport();
+        ensureNotificationPermission();
+    }
+
+    private void ensureNotificationPermission(){
+        if(Build.VERSION.SDK_INT>=33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS")!=android.content.pm.PackageManager.PERMISSION_GRANTED)
+            requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"},71);
+    }
+    private void postNetworkAlert(String title,String message){
+        if(Build.VERSION.SDK_INT>=33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS")!=android.content.pm.PackageManager.PERMISSION_GRANTED)return;
+        NotificationManager manager=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
+        if(manager==null)return;
+        String channelId="netguard_network_events";
+        if(Build.VERSION.SDK_INT>=26)manager.createNotificationChannel(new NotificationChannel(channelId,"Alertas de conexão",NotificationManager.IMPORTANCE_DEFAULT));
+        Intent open=new Intent(this,MainActivity.class);
+        PendingIntent pending=PendingIntent.getActivity(this,71,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        Notification notification=new Notification.Builder(this,channelId)
+            .setSmallIcon(R.drawable.netguard_logo).setContentTitle(title).setContentText(message)
+            .setStyle(new Notification.BigTextStyle().bigText(message)).setContentIntent(pending).setAutoCancel(true).build();
+        manager.notify(71,notification);
     }
 
     private void buildUi() {
@@ -206,7 +230,11 @@ public class MainActivity extends Activity {
                 history.add(new Sample(now,net,alt,gw,gwHttps,primaryOk,alternateOk));while(history.size()>2000)history.remove(0);
                 saveHistoryLocked();
             }
-            runOnUiThread(()->{probeInFlight=false;renderHistory();diagnoseLatest();});
+            runOnUiThread(()->{
+                probeInFlight=false;renderHistory();diagnoseLatest();
+                if(consecutiveFailures>=2&&!outageAlertSent){outageAlertSent=true;postNetworkAlert("Possível interrupção da internet","Dois ciclos consecutivos falharam nos dois destinos TCP externos. Verifique outros dispositivos antes de concluir.");}
+                else if(effective>=0&&outageAlertSent){outageAlertSent=false;postNetworkAlert("Conexão recuperada","Pelo menos um dos destinos TCP externos voltou a responder.");}
+            });
         });
     }
     private long probe(String host,int port,int timeout){
@@ -276,9 +304,9 @@ public class MainActivity extends Activity {
         Graph(Context c){super(c);}
         @Override protected void onDraw(Canvas c){super.onDraw(c);float w=getWidth(),h=getHeight();p.setColor(Color.rgb(55,72,94));p.setStrokeWidth(dp(1));for(int i=1;i<4;i++)c.drawLine(0,h*i/4,w,h*i/4,p);
             ArrayList<Sample> copy; synchronized(history){copy=new ArrayList<>(history);}int count=Math.min(80,copy.size());if(count<2)return;
-            long max=100;for(int i=copy.size()-count;i<copy.size();i++)if(copy.get(i).internetMs>max)max=copy.get(i).internetMs;
+            long max=100;for(int i=copy.size()-count;i<copy.size();i++)if(copy.get(i).effectiveLatency()>max)max=copy.get(i).effectiveLatency();
             p.setColor(GREEN);p.setStrokeWidth(dp(2));p.setStyle(Paint.Style.STROKE);boolean prev=false;float px=0,py=0;
-            for(int i=0;i<count;i++){Sample s=copy.get(copy.size()-count+i);if(!s.internetOk){prev=false;continue;}float x=4+(w-8)*i/(count-1);float y=h-8-(float)Math.min(s.internetMs,max)/(float)max*(h-16);
+            for(int i=0;i<count;i++){Sample s=copy.get(copy.size()-count+i);if(s.effectiveLatency()<0){prev=false;continue;}float x=4+(w-8)*i/(count-1);float y=h-8-(float)Math.min(s.effectiveLatency(),max)/(float)max*(h-16);
                 if(prev)c.drawLine(px,py,x,y,p);px=x;py=y;prev=true;}p.setStyle(Paint.Style.FILL);
         }
     }

@@ -59,9 +59,13 @@ public class MainActivity extends Activity {
     private Graph graph;
 
     static final class Sample {
-        final long time, internetMs, routerMs;
-        final boolean internetOk;
-        Sample(long t,long i,long r,boolean ok){time=t;internetMs=i;routerMs=r;internetOk=ok;}
+        final long time, internetMs, alternateMs, routerMs, routerHttpsMs;
+        final boolean internetOk, primaryOk, alternateOk;
+        Sample(long t,long i,long a,long r,long rh,boolean po,boolean ao){
+            time=t;internetMs=i;alternateMs=a;routerMs=r;routerHttpsMs=rh;
+            primaryOk=po;alternateOk=ao;internetOk=po||ao;
+        }
+        long effectiveLatency(){return primaryOk?internetMs:(alternateOk?alternateMs:-1);}
     }
 
     @Override public void onCreate(Bundle b) {
@@ -147,7 +151,7 @@ public class MainActivity extends Activity {
         tools.addView(txt("Os dados ficam neste aparelho. O app não altera o roteador nem envia medições para servidores.",11,MUTED,false));
         root.addView(tools);
 
-        root.addView(txt("Importante: latência TCP não é ping ICMP. Falhas TCP não são perda de pacotes IP. A resposta na porta 80 do roteador não comprova que ele esteja online ou offline.",11,MUTED,false));
+        root.addView(txt("A latência é tempo de conexão TCP (Cloudflare 1.1.1.1 e Google 8.8.8.8), não ping ICMP. Falhas TCP não são perda de pacotes IP. O roteador é testado nas portas 80 e 443; portas fechadas não significam que esteja offline.",11,MUTED,false));
         root.addView(txt("O monitoramento desta versão funciona enquanto o aplicativo permanece aberto. Não oferece monitoramento 24/7.",11,AMBER,true));
         setContentView(scroll);
     }
@@ -189,14 +193,17 @@ public class MainActivity extends Activity {
     private void runProbe(){
         if(probeInFlight)return; probeInFlight=true; updateTransport();
         worker.execute(()->{
-            long net=probe("1.1.1.1",443,3000);
-            long gw=probe("192.168.15.1",80,1500);
-            long now=System.currentTimeMillis(); boolean ok=net>=0;
+            long net=probe("1.1.1.1",443,1800);
+            long alt=probe("8.8.8.8",443,1800);
+            long gw=probe("192.168.15.1",80,700);
+            long gwHttps=probe("192.168.15.1",443,700);
+            long now=System.currentTimeMillis(); boolean primaryOk=net>=0, alternateOk=alt>=0;
+            long effective=primaryOk?net:(alternateOk?alt:-1);
             synchronized(history){
-                totalChecks++; if(!ok){tcpFailures++;consecutiveFailures++;}else consecutiveFailures=0;
-                if(ok&&lastGoodLatency>=0){double delta=Math.abs(net-lastGoodLatency);jitterEwma=(jitterEwma==0?delta:(0.25*delta+0.75*jitterEwma));}
-                if(ok)lastGoodLatency=net;
-                history.add(new Sample(now,net,gw,ok));while(history.size()>2000)history.remove(0);
+                totalChecks++; if(effective<0){tcpFailures++;consecutiveFailures++;}else consecutiveFailures=0;
+                if(effective>=0&&lastGoodLatency>=0){double delta=Math.abs(effective-lastGoodLatency);jitterEwma=(jitterEwma==0?delta:(0.25*delta+0.75*jitterEwma));}
+                if(effective>=0)lastGoodLatency=effective;
+                history.add(new Sample(now,net,alt,gw,gwHttps,primaryOk,alternateOk));while(history.size()>2000)history.remove(0);
                 saveHistoryLocked();
             }
             runOnUiThread(()->{probeInFlight=false;renderHistory();diagnoseLatest();});
@@ -213,16 +220,17 @@ public class MainActivity extends Activity {
     }
     private void diagnoseLatest(){
         int n=history.size();if(n==0)return;Sample last=history.get(n-1);
-        if(!last.internetOk){diagnostic.setText("A última tentativa TCP para 1.1.1.1:443 falhou. Isso pode indicar indisponibilidade do destino, bloqueio/instabilidade no caminho ou falta de internet. Repita e compare com outros dispositivos antes de concluir.");}
+        if(!last.internetOk){diagnostic.setText("As duas verificações TCP externas falharam (1.1.1.1:443 e 8.8.8.8:443). Pode haver falha de internet, bloqueio de saída ou indisponibilidade simultânea dos destinos. Compare com outro aparelho antes de concluir.");}
+        else if(!last.primaryOk||!last.alternateOk){diagnostic.setText("Somente um dos dois destinos TCP respondeu. Isso pode ser uma falha específica de destino ou rota; não é evidência suficiente de queda geral. Cloudflare: "+(last.primaryOk?"OK":"falhou")+"; Google: "+(last.alternateOk?"OK":"falhou")+".");}
         else if(jitterEwma>35){diagnostic.setText("A variação absoluta suavizada entre amostras TCP está elevada ("+String.format(Locale.getDefault(),"%.1f",jitterEwma)+" ms). É um indicador aproximado, não jitter UDP/ICMP. Compare em Ethernet e Wi-Fi.");}
-        else if(consecutiveFailures==0){diagnostic.setText("Último teste TCP concluído. Até agora não há evidência suficiente para atribuir uma causa. Latência atual: "+last.internetMs+" ms.");}
-        if(last.routerMs<0)diagnostic.append("\nO teste TCP à porta 80 de 192.168.15.1 não respondeu; isso não prova que o roteador esteja desligado.");
+        else if(consecutiveFailures==0){diagnostic.setText("Os dois destinos TCP externos responderam. Até agora não há evidência suficiente para atribuir uma causa. Latência efetiva: "+last.effectiveLatency()+" ms.");}
+        if(last.routerMs<0&&last.routerHttpsMs<0)diagnostic.append("\nO roteador não respondeu nas portas TCP 80 e 443. A interface pode usar outra porta ou bloquear conexões; isso não prova que ele esteja offline.");
     }
     private void renderHistory(){
         if(history.isEmpty())return;
         Sample s=history.get(history.size()-1);
-        internet.setText(s.internetOk?s.internetMs+" ms":"Falhou");
-        router.setText(s.routerMs>=0?s.routerMs+" ms":"Sem resposta");
+        internet.setText(s.effectiveLatency()>=0?s.effectiveLatency()+" ms":"Falhou");
+        router.setText(s.routerMs>=0?s.routerMs+" ms":(s.routerHttpsMs>=0?s.routerHttpsMs+" ms (HTTPS)":"Sem resposta"));
         jitter.setText(String.format(Locale.getDefault(),"%.1f ms",jitterEwma));
         double rate=totalChecks==0?0:(100.0*tcpFailures/totalChecks);
         failureRate.setText(String.format(Locale.getDefault(),"%.1f%%",rate));
@@ -231,17 +239,17 @@ public class MainActivity extends Activity {
         graph.invalidate();updateTransport();
     }
     private void saveHistoryLocked(){
-        try{JSONArray a=new JSONArray();for(Sample s:history){JSONObject o=new JSONObject();o.put("t",s.time);o.put("i",s.internetMs);o.put("r",s.routerMs);o.put("ok",s.internetOk);a.put(o);}
+        try{JSONArray a=new JSONArray();for(Sample s:history){JSONObject o=new JSONObject();o.put("t",s.time);o.put("i",s.internetMs);o.put("a",s.alternateMs);o.put("r",s.routerMs);o.put("rh",s.routerHttpsMs);o.put("po",s.primaryOk);o.put("ao",s.alternateOk);o.put("ok",s.internetOk);a.put(o);}
             getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString("samples",a.toString()).putLong("checks",totalChecks).putLong("fails",tcpFailures).apply();
         }catch(Exception ignored){}
     }
     private void loadHistory(){
         try{String raw=getSharedPreferences(PREFS,MODE_PRIVATE).getString("samples","[]");JSONArray a=new JSONArray(raw);
-            for(int i=0;i<a.length();i++){JSONObject o=a.getJSONObject(i);history.add(new Sample(o.getLong("t"),o.getLong("i"),o.getLong("r"),o.getBoolean("ok")));}
+            for(int i=0;i<a.length();i++){JSONObject o=a.getJSONObject(i);long primary=o.getLong("i");boolean primaryOk=o.optBoolean("po",o.getBoolean("ok"));long alternate=o.optLong("a",-1);boolean alternateOk=o.optBoolean("ao",false);history.add(new Sample(o.getLong("t"),primary,alternate,o.getLong("r"),o.optLong("rh",-1),primaryOk,alternateOk));}
             totalChecks=getSharedPreferences(PREFS,MODE_PRIVATE).getLong("checks",history.size());
             tcpFailures=getSharedPreferences(PREFS,MODE_PRIVATE).getLong("fails",0);
-            for(int i=history.size()-1;i>=0;i--)if(history.get(i).internetOk){lastGoodLatency=history.get(i).internetMs;break;}
-            for(int i=1;i<history.size();i++){Sample a1=history.get(i-1),a2=history.get(i);if(a1.internetOk&&a2.internetOk){double d=Math.abs(a2.internetMs-a1.internetMs);jitterEwma=(jitterEwma==0?d:0.25*d+0.75*jitterEwma);}}
+            for(int i=history.size()-1;i>=0;i--)if(history.get(i).effectiveLatency()>=0){lastGoodLatency=history.get(i).effectiveLatency();break;}
+            for(int i=1;i<history.size();i++){Sample a1=history.get(i-1),a2=history.get(i);if(a1.effectiveLatency()>=0&&a2.effectiveLatency()>=0){double d=Math.abs(a2.effectiveLatency()-a1.effectiveLatency());jitterEwma=(jitterEwma==0?d:0.25*d+0.75*jitterEwma);}}
         }catch(Exception ignored){}
     }
     private void exportCsv(){
@@ -250,9 +258,9 @@ public class MainActivity extends Activity {
     @Override protected void onActivityResult(int req,int result,Intent data){
         super.onActivityResult(req,result,data);if(req==42&&result==RESULT_OK&&data!=null&&data.getData()!=null){
             try(OutputStream out=getContentResolver().openOutputStream(data.getData())){
-                StringBuilder csv=new StringBuilder("timestamp,data_hora,latencia_tcp_ms,tempo_tcp_roteador_ms,tcp_internet_ok\n");
+                StringBuilder csv=new StringBuilder("timestamp,data_hora,cloudflare_tcp_ms,google_tcp_ms,roteador_http_tcp_ms,roteador_https_tcp_ms,internet_tcp_ok\n");
                 SimpleDateFormat f=new SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US);
-                synchronized(history){for(Sample s:history)csv.append(s.time).append(',').append(f.format(new Date(s.time))).append(',').append(s.internetMs).append(',').append(s.routerMs).append(',').append(s.internetOk).append('\n');}
+                synchronized(history){for(Sample s:history)csv.append(s.time).append(',').append(f.format(new Date(s.time))).append(',').append(s.internetMs).append(',').append(s.alternateMs).append(',').append(s.routerMs).append(',').append(s.routerHttpsMs).append(',').append(s.internetOk).append('\n');}
                 if(out==null)throw new IllegalStateException("Destino indisponível");out.write(csv.toString().getBytes(StandardCharsets.UTF_8));Toast.makeText(this,"CSV exportado.",Toast.LENGTH_LONG).show();
             }catch(Exception e){Toast.makeText(this,"Falha ao exportar CSV.",Toast.LENGTH_LONG).show();}
         }

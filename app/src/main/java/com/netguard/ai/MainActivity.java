@@ -108,6 +108,12 @@ public class MainActivity extends Activity {
         Button scan=button("Buscar dispositivos na rede",GREEN,NAVY);
         scan.setOnClickListener(v->scanDevices(scan));
         controls.addView(scan);
+        Button routerPanel=button("Abrir painel do roteador",Color.rgb(44,64,91),WHITE);
+        routerPanel.setOnClickListener(v->{
+            try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse("http://192.168.15.1")));}
+            catch(Exception e){Toast.makeText(this,"Não foi possível abrir o painel do roteador.",Toast.LENGTH_LONG).show();}
+        });
+        controls.addView(routerPanel);
         devices=txt("Dispositivos: ainda não pesquisados.",12,MUTED,false);
         controls.addView(devices);
         root.addView(controls);

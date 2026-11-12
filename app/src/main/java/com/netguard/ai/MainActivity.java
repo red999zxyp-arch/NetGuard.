@@ -45,6 +45,7 @@ public class MainActivity extends Activity {
     private static final String PREFS="netguard_local_history";
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
+    private final ExecutorService scanWorker=Executors.newSingleThreadExecutor();
     private final ArrayList<Sample> history=new ArrayList<>();
     private boolean running=false, gameMode=false, probeInFlight=false;
     private int intervalMs=10000, consecutiveFailures=0;
@@ -167,7 +168,7 @@ public class MainActivity extends Activity {
     private void scanDevices(Button button){
         button.setEnabled(false);
         devices.setText("Pesquisando dispositivos acessíveis na rede local…");
-        LanScanner.scan(this,(subnet,found,error)->runOnUiThread(()->{
+        scanWorker.execute(()->LanScanner.scan(this,(subnet,found,error)->runOnUiThread(()->{
             button.setEnabled(true);
             if(error!=null){devices.setText("Busca indisponível: "+error);return;}
             StringBuilder out=new StringBuilder("Sub-rede: "+subnet+"\nHosts com resposta: "+found.size()+"\nNota: a busca identifica apenas hosts que responderam ao ARP ou a portas TCP testadas; não é a lista completa do roteador.");
@@ -176,7 +177,7 @@ public class MainActivity extends Activity {
                    .append(" · portas: ").append(d.services);
             }
             devices.setText(out.toString());
-        }));
+        })));
     }
     private void toggleMode(){gameMode=!gameMode;modeButton.setText(gameMode?"Modo: Jogos":"Modo: Geral");diagnostic.setText(gameMode?"Perfil Rocket League: priorizando estabilidade e observação de variações. O teste do celular não mede o ping do jogo no outro dispositivo.":"Perfil geral: observação da conectividade externa e do acesso TCP ao roteador.");}
 
@@ -255,7 +256,7 @@ public class MainActivity extends Activity {
         new android.app.AlertDialog.Builder(this).setTitle("Apagar histórico?").setMessage("Todas as amostras locais serão apagadas. Esta ação não pode ser desfeita.")
             .setNegativeButton("Cancelar",null).setPositiveButton("Apagar",(d,w)->{synchronized(history){history.clear();totalChecks=0;tcpFailures=0;lastGoodLatency=-1;jitterEwma=0;consecutiveFailures=0;saveHistoryLocked();}internet.setText("-- ms");router.setText("-- ms");jitter.setText("-- ms");failureRate.setText("0%");updated.setText("Histórico apagado.");summary.setText("Aguardando novas amostras.");diagnostic.setText("Histórico local apagado.");graph.invalidate();}).show();
     }
-    @Override protected void onDestroy(){running=false;if(loop!=null)handler.removeCallbacks(loop);worker.shutdownNow();super.onDestroy();}
+    @Override protected void onDestroy(){running=false;if(loop!=null)handler.removeCallbacks(loop);worker.shutdownNow();scanWorker.shutdownNow();super.onDestroy();}
 
     private class Graph extends View{
         private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);

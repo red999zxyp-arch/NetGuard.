@@ -51,7 +51,7 @@ public class MainActivity extends Activity {
     private double jitterEwma=0;
     private long totalChecks=0, tcpFailures=0;
     private Runnable loop;
-    private TextView status, transport, internet, router, jitter, failureRate, diagnostic, updated, summary;
+    private TextView status, transport, internet, router, jitter, failureRate, diagnostic, updated, summary, devices;
     private Button toggle, modeButton;
     private Spinner interval;
     private Graph graph;
@@ -104,7 +104,13 @@ public class MainActivity extends Activity {
             public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){intervalMs=new int[]{5000,10000,30000,60000}[pos];}
             public void onNothingSelected(android.widget.AdapterView<?> p){}
         });
-        controls.addView(interval); root.addView(controls);
+        controls.addView(interval);
+        Button scan=button("Buscar dispositivos na rede",GREEN,NAVY);
+        scan.setOnClickListener(v->scanDevices(scan));
+        controls.addView(scan);
+        devices=txt("Dispositivos: ainda não pesquisados.",12,MUTED,false);
+        controls.addView(devices);
+        root.addView(controls);
 
         LinearLayout chart=card(); chart.addView(txt("HISTÓRICO DE LATÊNCIA TCP",15,WHITE,true));
         graph=new Graph(this); chart.addView(graph,new LinearLayout.LayoutParams(-1,dp(175)));
@@ -143,6 +149,20 @@ public class MainActivity extends Activity {
         if(running){toggle.setText("Pausar monitoramento");status.setText("●  Monitoramento ativo");status.setTextColor(GREEN);
             loop=new Runnable(){public void run(){if(!running)return;runProbe();handler.postDelayed(this,intervalMs);}};loop.run();
         }else{if(loop!=null)handler.removeCallbacks(loop);toggle.setText("Iniciar monitoramento");status.setText("●  Monitoramento pausado");status.setTextColor(MUTED);}
+    }
+    private void scanDevices(Button button){
+        button.setEnabled(false);
+        devices.setText("Pesquisando dispositivos acessíveis na rede local…");
+        LanScanner.scan(this,(subnet,found,error)->{
+            button.setEnabled(true);
+            if(error!=null){devices.setText("Busca indisponível: "+error);return;}
+            StringBuilder out=new StringBuilder("Rede detectada: "+subnet+"\\nHosts encontrados: "+found.size());
+            for(LanScanner.Device d:found){
+                out.append("\\n").append(d.ip).append(" · ").append(d.mac)
+                   .append(" · portas: ").append(d.services);
+            }
+            devices.setText(out.toString());
+        });
     }
     private void toggleMode(){gameMode=!gameMode;modeButton.setText(gameMode?"Modo: Jogos":"Modo: Geral");diagnostic.setText(gameMode?"Perfil Rocket League: priorizando estabilidade e observação de variações. O teste do celular não mede o ping do jogo no outro dispositivo.":"Perfil geral: observação da conectividade externa e do acesso TCP ao roteador.");}
 

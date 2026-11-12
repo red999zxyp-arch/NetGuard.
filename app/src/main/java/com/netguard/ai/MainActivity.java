@@ -100,7 +100,7 @@ public class MainActivity extends Activity {
         Intent open=new Intent(this,MainActivity.class);
         PendingIntent pending=PendingIntent.getActivity(this,71,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         Notification notification=new Notification.Builder(this,channelId)
-            .setSmallIcon(R.drawable.netguard_logo).setContentTitle(title).setContentText(message)
+            .setSmallIcon(R.drawable.ic_notification).setContentTitle(title).setContentText(message)
             .setStyle(new Notification.BigTextStyle().bigText(message)).setContentIntent(pending).setAutoCancel(true).build();
         manager.notify(71,notification);
     }

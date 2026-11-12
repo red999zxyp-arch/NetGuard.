@@ -2,10 +2,10 @@
 
 Aplicativo Android nativo (Java) para observar a conectividade e manter um histórico local.
 
-## Funcionalidades desta versão (0.3.1)
+## Funcionalidades desta versão (0.3.2)
 
 - Identifica o transporte ativo: Ethernet, Wi-Fi ou dados móveis.
-- Busca hosts que respondem na sub-rede local por ARP ou portas TCP selecionadas; não equivale à lista completa de clientes do roteador.
+- Busca hosts que respondem na sub-rede local por ARP ou portas TCP selecionadas, em tarefa de segundo plano; não equivale à lista completa de clientes do roteador.
 - Mede o tempo de abertura de conexão TCP com `1.1.1.1:443`.
 - Tenta abrir conexão TCP com `192.168.15.1:80` como verificação auxiliar da rede local.
 - Monitoramento manual com intervalos de 5, 10, 30 ou 60 segundos, enquanto a tela permanece aberta.

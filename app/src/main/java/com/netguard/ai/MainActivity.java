@@ -16,6 +16,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.ImageView;
 import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.ArrayAdapter;
@@ -77,8 +78,15 @@ public class MainActivity extends Activity {
         LinearLayout root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(18),dp(22),dp(18),dp(28)); scroll.addView(root);
 
-        TextView brand=txt("NETGUARD AI",25,WHITE,true); root.addView(brand);
-        root.addView(txt("Diagnóstico e estabilidade da conexão",13,MUTED,false));
+        LinearLayout brandRow=horizontal();
+        ImageView logo=new ImageView(this);
+        logo.setImageResource(R.drawable.netguard_logo);
+        brandRow.addView(logo,new LinearLayout.LayoutParams(dp(48),dp(48)));
+        TextView brand=txt("NETGUARD AI",24,WHITE,true);
+        LinearLayout brandText=new LinearLayout(this);brandText.setOrientation(LinearLayout.VERTICAL);
+        brandText.setPadding(dp(10),0,0,0);brandText.addView(brand);
+        brandText.addView(txt("Diagnóstico e estabilidade da conexão",12,MUTED,false));
+        brandRow.addView(brandText);root.addView(brandRow);
         LinearLayout state=card(); status=txt("●  Monitoramento pausado",16,MUTED,true);
         state.addView(status); transport=txt("Rede: identificando…",13,MUTED,false); state.addView(transport);
         root.addView(state);

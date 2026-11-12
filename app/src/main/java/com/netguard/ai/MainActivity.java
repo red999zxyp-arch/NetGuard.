@@ -168,6 +168,13 @@ public class MainActivity extends Activity {
         diagnostic=txt("Inicie o monitoramento para reunir dados. Nenhum diagnóstico será presumido.",13,MUTED,false);
         diagnosis.addView(diagnostic); root.addView(diagnosis);
 
+        LinearLayout optimize=card(); optimize.addView(txt("OTIMIZAÇÃO SEGURA DA REDE",15,WHITE,true));
+        optimize.addView(txt("O NetGuard não altera o firmware nem configurações do roteador automaticamente. Use este checklist para reduzir congestionamento sem arriscar a conexão:",12,MUTED,false));
+        optimize.addView(txt("• Jogos: mantenha o PC/console ligado por Ethernet diretamente ao roteador.\\n• Durante partidas: pause downloads, atualizações, backups e streaming pesado.\\n• Wi-Fi: prefira 5 GHz quando o dispositivo estiver próximo; 2,4 GHz costuma alcançar mais longe.\\n• Posicionamento: deixe o roteador em local aberto, elevado e central, longe de obstáculos e fontes de interferência.\\n• Dispositivos: revise os conectados pelo app/painel oficial Vivo; pause apenas aparelhos que você reconhece e tem autorização para gerenciar.\\n• QoS: só ative priorização se a opção existir no firmware oficial e você souber identificar o dispositivo de jogo.",12,WHITE,false));
+        Button vivoGuide=button("Abrir guia oficial de Wi-Fi da Vivo",Color.rgb(44,64,91),WHITE);
+        vivoGuide.setOnClickListener(v->{try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://vivo.com.br/para-voce/ajuda/autoatendimento/configuracoes-do-wifi")));}catch(Exception e){Toast.makeText(this,"Não foi possível abrir o guia.",Toast.LENGTH_LONG).show();}});
+        optimize.addView(vivoGuide);root.addView(optimize);
+
         LinearLayout tools=card(); tools.addView(txt("DADOS E PRIVACIDADE",15,WHITE,true));
         LinearLayout toolrow=horizontal();
         Button export=button("Exportar CSV",GREEN,NAVY); export.setOnClickListener(v->exportCsv());

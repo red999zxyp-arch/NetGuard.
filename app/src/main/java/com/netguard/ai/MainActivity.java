@@ -14,6 +14,9 @@ import android.graphics.Paint;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
+import android.net.LinkProperties;
+import android.net.RouteInfo;
+import java.net.InetAddress;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -59,16 +62,16 @@ public class MainActivity extends Activity {
     private double jitterEwma=0;
     private long totalChecks=0, tcpFailures=0;
     private Runnable loop;
-    private TextView status, transport, internet, router, jitter, failureRate, diagnostic, updated, summary, devices;
+    private TextView status, transport, internet, router, jitter, failureRate, diagnostic, updated, summary, devices, dnsMetric, networkDetails;
     private Button toggle, modeButton;
     private Spinner interval;
     private Graph graph;
 
     static final class Sample {
-        final long time, internetMs, alternateMs, routerMs, routerHttpsMs;
+        final long time, internetMs, alternateMs, routerMs, routerHttpsMs, dnsMs;
         final boolean internetOk, primaryOk, alternateOk;
-        Sample(long t,long i,long a,long r,long rh,boolean po,boolean ao){
-            time=t;internetMs=i;alternateMs=a;routerMs=r;routerHttpsMs=rh;
+        Sample(long t,long i,long a,long r,long rh,long d,boolean po,boolean ao){
+            time=t;internetMs=i;alternateMs=a;routerMs=r;routerHttpsMs=rh;dnsMs=d;
             primaryOk=po;alternateOk=ao;internetOk=po||ao;
         }
         long effectiveLatency(){return primaryOk?internetMs:(alternateOk?alternateMs:-1);}
@@ -127,8 +130,11 @@ public class MainActivity extends Activity {
 
         LinearLayout row=horizontal(); internet=metric(row,"LATÊNCIA TCP","-- ms");
         router=metric(row,"ROTEADOR TCP","-- ms"); root.addView(row);
-        LinearLayout row2=horizontal(); jitter=metric(row2,"VARIAÇÃO (JITTER EST.)","-- ms");
+        LinearLayout row2=horizontal(); jitter=metric(row2,"VARIAÇÃO TCP EST.","-- ms");
         failureRate=metric(row2,"FALHAS TCP","0%"); root.addView(row2);
+        LinearLayout row3=horizontal(); dnsMetric=metric(row3,"CONSULTA DNS","-- ms"); root.addView(row3);
+        networkDetails=txt("Detalhes da rede: aguardando leitura.",12,MUTED,false);
+        LinearLayout netCard=card();netCard.addView(txt("INFORMAÇÕES DA REDE",15,WHITE,true));netCard.addView(networkDetails);root.addView(netCard);
 
         LinearLayout controls=card();
         controls.addView(txt("CONTROLES",11,MUTED,true));
@@ -232,8 +238,10 @@ public class MainActivity extends Activity {
         worker.execute(()->{
             long net=probe("1.1.1.1",443,1800);
             long alt=probe("8.8.8.8",443,1800);
-            long gw=probe("192.168.15.1",80,700);
-            long gwHttps=probe("192.168.15.1",443,700);
+            String gateway=getGatewayAddress();
+            long gw=gateway==null?-1:probe(gateway,80,700);
+            long gwHttps=gateway==null?-1:probe(gateway,443,700);
+            long dns=dnsProbe();
             long now=System.currentTimeMillis(); boolean primaryOk=net>=0, alternateOk=alt>=0;
             long effective=primaryOk?net:(alternateOk?alt:-1);
             int source=primaryOk?1:(alternateOk?2:0);
@@ -242,7 +250,7 @@ public class MainActivity extends Activity {
                 if(effective>=0&&lastGoodLatency>=0&&source==lastGoodSource){double delta=Math.abs(effective-lastGoodLatency);jitterEwma=(jitterEwma==0?delta:(0.25*delta+0.75*jitterEwma));}
                 else if(source!=lastGoodSource)jitterEwma=0;
                 if(effective>=0){lastGoodLatency=effective;lastGoodSource=source;}
-                history.add(new Sample(now,net,alt,gw,gwHttps,primaryOk,alternateOk));while(history.size()>2000)history.remove(0);
+                history.add(new Sample(now,net,alt,gw,gwHttps,dns,primaryOk,alternateOk));while(history.size()>2000)history.remove(0);
                 saveHistoryLocked();
             }
             runOnUiThread(()->{
@@ -254,6 +262,18 @@ public class MainActivity extends Activity {
     }
     private long probe(String host,int port,int timeout){
         long start=System.nanoTime();try(Socket s=new Socket()){s.connect(new InetSocketAddress(host,port),timeout);return (System.nanoTime()-start)/1_000_000L;}catch(Exception e){return -1;}
+    }
+    private String getGatewayAddress(){
+        try{ConnectivityManager cm=(ConnectivityManager)getSystemService(Context.CONNECTIVITY_SERVICE);Network n=cm==null?null:cm.getActiveNetwork();LinkProperties lp=n==null?null:cm.getLinkProperties(n);if(lp!=null)for(RouteInfo r:lp.getRoutes())if(r.isDefaultRoute()&&r.getGateway()!=null)return r.getGateway().getHostAddress();}catch(Exception ignored){}
+        return null;
+    }
+    private long dnsProbe(){long start=System.nanoTime();try{InetAddress.getAllByName("example.com");return (System.nanoTime()-start)/1_000_000L;}catch(Exception e){return -1;}}
+    private String readNetworkDetails(){
+        try{ConnectivityManager cm=(ConnectivityManager)getSystemService(Context.CONNECTIVITY_SERVICE);Network n=cm.getActiveNetwork();NetworkCapabilities caps=n==null?null:cm.getNetworkCapabilities(n);LinkProperties lp=n==null?null:cm.getLinkProperties(n);StringBuilder s=new StringBuilder();
+            if(caps!=null){s.append("Transporte: ");if(caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))s.append("Ethernet");else if(caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI))s.append("Wi-Fi");else if(caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR))s.append("móvel");else s.append("outro");s.append("\\nValidada para internet: ").append(caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)?"sim":"não/indisponível");}
+            if(lp!=null){s.append("\\nGateway: ").append(getGatewayAddress()==null?"indisponível":getGatewayAddress());s.append("\\nDNS configurado: ");for(InetAddress d:lp.getDnsServers())s.append(d.getHostAddress()).append(" ");s.append("\\nEndereços locais: ");for(android.net.LinkAddress a:lp.getLinkAddresses())s.append(a.getAddress().getHostAddress()).append("/").append(a.getPrefixLength()).append(" ");}
+            return s.length()==0?"Sem informações de rede disponíveis.":s.toString();
+        }catch(Exception e){return "Não foi possível ler detalhes da rede.";}
     }
     private void updateTransport(){
         try{ConnectivityManager cm=(ConnectivityManager)getSystemService(Context.CONNECTIVITY_SERVICE);Network n=cm.getActiveNetwork();NetworkCapabilities c=n==null?null:cm.getNetworkCapabilities(n);
@@ -274,6 +294,8 @@ public class MainActivity extends Activity {
         Sample s=history.get(history.size()-1);
         internet.setText(s.effectiveLatency()>=0?s.effectiveLatency()+" ms":"Falhou");
         router.setText(s.routerMs>=0?s.routerMs+" ms":(s.routerHttpsMs>=0?s.routerHttpsMs+" ms (HTTPS)":"Sem resposta"));
+        dnsMetric.setText(s.dnsMs>=0?s.dnsMs+" ms":"Falhou");
+        networkDetails.setText(readNetworkDetails());
         jitter.setText(String.format(Locale.getDefault(),"%.1f ms",jitterEwma));
         double rate=totalChecks==0?0:(100.0*tcpFailures/totalChecks);
         failureRate.setText(String.format(Locale.getDefault(),"%.1f%%",rate));
@@ -282,13 +304,13 @@ public class MainActivity extends Activity {
         graph.invalidate();updateTransport();
     }
     private void saveHistoryLocked(){
-        try{JSONArray a=new JSONArray();for(Sample s:history){JSONObject o=new JSONObject();o.put("t",s.time);o.put("i",s.internetMs);o.put("a",s.alternateMs);o.put("r",s.routerMs);o.put("rh",s.routerHttpsMs);o.put("po",s.primaryOk);o.put("ao",s.alternateOk);o.put("ok",s.internetOk);a.put(o);}
+        try{JSONArray a=new JSONArray();for(Sample s:history){JSONObject o=new JSONObject();o.put("t",s.time);o.put("i",s.internetMs);o.put("a",s.alternateMs);o.put("r",s.routerMs);o.put("rh",s.routerHttpsMs);o.put("dns",s.dnsMs);o.put("po",s.primaryOk);o.put("ao",s.alternateOk);o.put("ok",s.internetOk);a.put(o);}
             getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString("samples",a.toString()).putLong("checks",totalChecks).putLong("fails",tcpFailures).apply();
         }catch(Exception ignored){}
     }
     private void loadHistory(){
         try{String raw=getSharedPreferences(PREFS,MODE_PRIVATE).getString("samples","[]");JSONArray a=new JSONArray(raw);
-            for(int i=0;i<a.length();i++){JSONObject o=a.getJSONObject(i);long primary=o.getLong("i");boolean primaryOk=o.optBoolean("po",o.getBoolean("ok"));long alternate=o.optLong("a",-1);boolean alternateOk=o.optBoolean("ao",false);history.add(new Sample(o.getLong("t"),primary,alternate,o.getLong("r"),o.optLong("rh",-1),primaryOk,alternateOk));}
+            for(int i=0;i<a.length();i++){JSONObject o=a.getJSONObject(i);long primary=o.getLong("i");boolean primaryOk=o.optBoolean("po",o.getBoolean("ok"));long alternate=o.optLong("a",-1);boolean alternateOk=o.optBoolean("ao",false);history.add(new Sample(o.getLong("t"),primary,alternate,o.getLong("r"),o.optLong("rh",-1),o.optLong("dns",-1),primaryOk,alternateOk));}
             totalChecks=getSharedPreferences(PREFS,MODE_PRIVATE).getLong("checks",history.size());
             tcpFailures=getSharedPreferences(PREFS,MODE_PRIVATE).getLong("fails",0);
             for(int i=history.size()-1;i>=0;i--)if(history.get(i).effectiveLatency()>=0){lastGoodLatency=history.get(i).effectiveLatency();lastGoodSource=history.get(i).effectiveSource();break;}
@@ -301,9 +323,9 @@ public class MainActivity extends Activity {
     @Override protected void onActivityResult(int req,int result,Intent data){
         super.onActivityResult(req,result,data);if(req==42&&result==RESULT_OK&&data!=null&&data.getData()!=null){
             try(OutputStream out=getContentResolver().openOutputStream(data.getData())){
-                StringBuilder csv=new StringBuilder("timestamp,data_hora,cloudflare_tcp_ms,google_tcp_ms,roteador_http_tcp_ms,roteador_https_tcp_ms,internet_tcp_ok\n");
+                StringBuilder csv=new StringBuilder("timestamp,data_hora,cloudflare_tcp_ms,google_tcp_ms,roteador_http_tcp_ms,roteador_https_tcp_ms,dns_lookup_ms,internet_tcp_ok\n");
                 SimpleDateFormat f=new SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US);
-                synchronized(history){for(Sample s:history)csv.append(s.time).append(',').append(f.format(new Date(s.time))).append(',').append(s.internetMs).append(',').append(s.alternateMs).append(',').append(s.routerMs).append(',').append(s.routerHttpsMs).append(',').append(s.internetOk).append('\n');}
+                synchronized(history){for(Sample s:history)csv.append(s.time).append(',').append(f.format(new Date(s.time))).append(',').append(s.internetMs).append(',').append(s.alternateMs).append(',').append(s.routerMs).append(',').append(s.routerHttpsMs).append(',').append(s.dnsMs).append(',').append(s.internetOk).append('\n');}
                 if(out==null)throw new IllegalStateException("Destino indisponível");out.write(csv.toString().getBytes(StandardCharsets.UTF_8));Toast.makeText(this,"CSV exportado.",Toast.LENGTH_LONG).show();
             }catch(Exception e){Toast.makeText(this,"Falha ao exportar CSV.",Toast.LENGTH_LONG).show();}
         }

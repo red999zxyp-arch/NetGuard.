@@ -182,7 +182,7 @@ public class MainActivity extends Activity {
     private void toggleMode(){
         gameMode=!gameMode;modeButton.setText(gameMode?"Modo: Jogos":"Modo: Geral");
         diagnostic.setText(gameMode
-            ?"Perfil Rocket League — recomendações seguras:\\n1. Mantenha o console/PC ligado diretamente por Ethernet.\\n2. Evite downloads, streaming pesado e backups durante as partidas.\\n3. Se o roteador oferecer QoS oficialmente, priorize o dispositivo de jogo sem limitar a banda à toa.\\n4. Compare medições em horários diferentes. Este celular não mede o ping real do jogo nem altera o tráfego do console."
+            ?"Perfil Rocket League — recomendações seguras:\n1. Mantenha o console/PC ligado diretamente por Ethernet.\n2. Evite downloads, streaming pesado e backups durante as partidas.\n3. Se o roteador oferecer QoS oficialmente, priorize o dispositivo de jogo sem limitar a banda à toa.\n4. Compare medições em horários diferentes. Este celular não mede o ping real do jogo nem altera o tráfego do console."
             :"Perfil geral: observação da conectividade externa e do acesso TCP ao roteador. As medições não são ping ICMP nem perda de pacotes IP.");
     }
 

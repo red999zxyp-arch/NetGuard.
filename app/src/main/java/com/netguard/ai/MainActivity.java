@@ -78,7 +78,10 @@ public class MainActivity extends Activity {
         getWindow().setStatusBarColor(NAVY);
         getWindow().setNavigationBarColor(NAVY);
         loadHistory();
+        intervalMs=getSharedPreferences(PREFS,MODE_PRIVATE).getInt("interval_ms",10000);
+        gameMode=getSharedPreferences(PREFS,MODE_PRIVATE).getBoolean("game_mode",false);
         buildUi();
+        applyMode();
         renderHistory();
         updateTransport();
         ensureNotificationPermission();
@@ -136,9 +139,9 @@ public class MainActivity extends Activity {
         interval=new Spinner(this);
         String[] choices={"5 segundos","10 segundos","30 segundos","60 segundos"};
         interval.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,choices));
-        interval.setSelection(1);
+        interval.setSelection(intervalMs==5000?0:intervalMs==30000?2:intervalMs==60000?3:1);
         interval.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
-            public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){intervalMs=new int[]{5000,10000,30000,60000}[pos];}
+            public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){intervalMs=new int[]{5000,10000,30000,60000}[pos];getSharedPreferences(PREFS,MODE_PRIVATE).edit().putInt("interval_ms",intervalMs).apply();}
             public void onNothingSelected(android.widget.AdapterView<?> p){}
         });
         controls.addView(interval);
@@ -207,11 +210,12 @@ public class MainActivity extends Activity {
             devices.setText(out.toString());
         })));
     }
-    private void toggleMode(){
-        gameMode=!gameMode;modeButton.setText(gameMode?"Modo: Jogos":"Modo: Geral");
-        diagnostic.setText(gameMode
-            ?"Perfil Rocket League — recomendações seguras:\n1. Mantenha o console/PC ligado diretamente por Ethernet.\n2. Evite downloads, streaming pesado e backups durante as partidas.\n3. Se o roteador oferecer QoS oficialmente, priorize o dispositivo de jogo sem limitar a banda à toa.\n4. Compare medições em horários diferentes. Este celular não mede o ping real do jogo nem altera o tráfego do console."
-            :"Perfil geral: observação da conectividade externa e do acesso TCP ao roteador. As medições não são ping ICMP nem perda de pacotes IP.");
+    private void toggleMode(){gameMode=!gameMode;getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean("game_mode",gameMode).apply();applyMode();}
+    private void applyMode(){
+        if(modeButton!=null)modeButton.setText(gameMode?"Modo: Jogos":"Modo: Geral");
+        if(diagnostic!=null)diagnostic.setText(gameMode
+            ?"Perfil Rocket League — recomendações seguras:\n1. Mantenha o console/PC ligado diretamente por Ethernet.\n2. Evite downloads, streaming pesado e backups durante as partidas.\n3. Se o roteador oferecer QoS oficialmente, priorize o dispositivo de jogo sem limitar a banda à toa.\n4. Compare medições em horários diferentes. O celular não mede o ping real do jogo nem altera o tráfego do console."
+            :"Perfil geral: comparação de dois destinos externos e verificação TCP auxiliar do roteador. As medições não são ping ICMP nem perda de pacotes IP.");
     }
 
     private void runProbe(){
